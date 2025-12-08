@@ -1,49 +1,50 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../../components/ui/Components';
-import { MOCK_MARKET_DATA } from '../market/data';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
+import { useTrading } from '../../context/TradingContext';
 
 export const PortfolioModule = () => {
-    // Generate Mock Holdings from Market Data
-    const [holdings] = useState(() => {
-        return MOCK_MARKET_DATA.slice(0, 8).map(bond => ({
-            ...bond,
-            quantity: Math.floor(Math.random() * 100) + 10,
-            avgCost: bond.price * (0.95 + Math.random() * 0.1) // +/- 5% of current price
-        }));
-    });
+    const { holdings, cash, getHoldingsValuation } = useTrading();
+    const { totalValue: holdingsValue, unrealizedPnl } = getHoldingsValuation();
 
-    const totalValue = holdings.reduce((sum, h) => sum + (h.price * h.quantity), 0);
-    const totalCost = holdings.reduce((sum, h) => sum + (h.avgCost * h.quantity), 0);
-    const pnl = totalValue - totalCost;
-    const pnlPercent = (pnl / totalCost) * 100;
+    const totalAccountValue = cash + holdingsValue;
+    const pnlPercent = holdingsValue > 0 ? (unrealizedPnl / (holdingsValue - unrealizedPnl)) * 100 : 0;
 
-    // Weighted Durations
-    const portfolioDuration = holdings.reduce((sum, h) => sum + (h.duration * (h.price * h.quantity)), 0) / totalValue;
-    const portfolioYield = holdings.reduce((sum, h) => sum + (h.yield * (h.price * h.quantity)), 0) / totalValue;
+    // Weighted Durations (Live Calc)
+    const portfolioDuration = holdings.length > 0
+        ? holdings.reduce((sum, h) => sum + (h.duration * (h.price * h.quantity)), 0) / holdingsValue
+        : 0;
 
-    // Generate Mock Performance History
+    const portfolioYield = holdings.length > 0
+        ? holdings.reduce((sum, h) => sum + (h.yield * (h.price * h.quantity)), 0) / holdingsValue
+        : 0;
+
+    // Mock Performance Data (since we don't store historical timeseries yet)
     const performanceData = Array.from({ length: 30 }).map((_, i) => ({
         day: i + 1,
-        value: totalValue * (1 + Math.sin(i / 5) * 0.02) // subtle wave
+        value: totalAccountValue * (1 + Math.sin(i / 5) * 0.02)
     }));
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-100">Portfolio Management</h2>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-slate-100">Portfolio Management</h2>
+                <div className="text-slate-400">
+                    Cash Balance: <span className="text-slate-100 font-bold">${cash.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card className="bg-slate-900/50">
                     <CardContent className="pt-6">
-                        <div className="text-sm text-slate-400">Total Value</div>
-                        <div className="text-2xl font-bold text-slate-100">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div className="text-sm text-slate-400">Total Account Value</div>
+                        <div className="text-2xl font-bold text-slate-100">${totalAccountValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50">
                     <CardContent className="pt-6">
-                        <div className="text-sm text-slate-400">Total P&L</div>
-                        <div className={`text-2xl font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {pnl >= 0 ? '+' : ''}{pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })} ({pnlPercent.toFixed(2)}%)
+                        <div className="text-sm text-slate-400">Unrealized P&L</div>
+                        <div className={`text-2xl font-bold ${unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })} ({pnlPercent.toFixed(2)}%)
                         </div>
                     </CardContent>
                 </Card>
@@ -67,40 +68,46 @@ export const PortfolioModule = () => {
                         <CardTitle>Holdings</CardTitle>
                     </CardHeader>
                     <CardContent className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 border-b border-slate-800">
-                                <tr>
-                                    <th className="px-4 py-3">Asset</th>
-                                    <th className="px-4 py-3 text-right">Qty</th>
-                                    <th className="px-4 py-3 text-right">Avg Cost</th>
-                                    <th className="px-4 py-3 text-right">Price</th>
-                                    <th className="px-4 py-3 text-right">Value</th>
-                                    <th className="px-4 py-3 text-right">P&L</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {holdings.map(h => {
-                                    const val = h.price * h.quantity;
-                                    const cost = h.avgCost * h.quantity;
-                                    const itemPnl = val - cost;
-                                    return (
-                                        <tr key={h.id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
-                                            <td className="px-4 py-3 font-medium text-slate-200">
-                                                <div>{h.issuer}</div>
-                                                <div className="text-xs text-slate-500">{h.rating} • {h.maturityDate.split('-')[0]}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">{h.quantity}</td>
-                                            <td className="px-4 py-3 text-right text-slate-400">${h.avgCost.toFixed(2)}</td>
-                                            <td className="px-4 py-3 text-right text-slate-200">${h.price.toFixed(2)}</td>
-                                            <td className="px-4 py-3 text-right text-slate-100 font-medium">${val.toLocaleString()}</td>
-                                            <td className={`px-4 py-3 text-right font-medium ${itemPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                {itemPnl >= 0 ? '+' : ''}{itemPnl.toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                        {holdings.length === 0 ? (
+                            <div className="text-center py-10 text-slate-500">
+                                No holdings yet. Go to Market to trade.
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 border-b border-slate-800">
+                                    <tr>
+                                        <th className="px-4 py-3">Asset</th>
+                                        <th className="px-4 py-3 text-right">Qty</th>
+                                        <th className="px-4 py-3 text-right">Avg Cost</th>
+                                        <th className="px-4 py-3 text-right">Price</th>
+                                        <th className="px-4 py-3 text-right">Value</th>
+                                        <th className="px-4 py-3 text-right">P&L</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {holdings.map(h => {
+                                        const val = h.price * h.quantity;
+                                        const cost = h.avgCost * h.quantity;
+                                        const itemPnl = val - cost;
+                                        return (
+                                            <tr key={h.id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
+                                                <td className="px-4 py-3 font-medium text-slate-200">
+                                                    <div>{h.issuer}</div>
+                                                    <div className="text-xs text-slate-500">{h.rating} • {h.maturityDate}</div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">{h.quantity}</td>
+                                                <td className="px-4 py-3 text-right text-slate-400">${h.avgCost.toFixed(2)}</td>
+                                                <td className="px-4 py-3 text-right text-slate-200">${h.price.toFixed(2)}</td>
+                                                <td className="px-4 py-3 text-right text-slate-100 font-medium">${val.toLocaleString()}</td>
+                                                <td className={`px-4 py-3 text-right font-medium ${itemPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {itemPnl >= 0 ? '+' : ''}{itemPnl.toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
                     </CardContent>
                 </Card>
 

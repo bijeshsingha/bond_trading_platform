@@ -1,43 +1,67 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Components';
-import { MOCK_MARKET_DATA } from '../market/data';
+import { Card, CardContent, CardHeader, CardTitle, Button } from '../../components/ui/Components';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Cell } from 'recharts';
 import { calculateBondPrice } from '../../utils/finance';
+import { useTrading } from '../../context/TradingContext';
+import { Link } from 'react-router-dom';
 
 export const ScenarioModule = () => {
+    const { holdings } = useTrading();
     const [rateShock, setRateShock] = useState(0); // in basis points, e.g. 50 = +0.50%
 
-    // Use a subset of market data as "My Portfolio" for simulation
-    const portfolio = MOCK_MARKET_DATA.slice(0, 10).map(b => ({ ...b, quantity: 100 }));
+    // Calculate current market value of holdings
+    const currentTotalValue = holdings.reduce((sum, b) => sum + (b.price * b.quantity), 0);
 
-    const currentTotalValue = portfolio.reduce((sum, b) => sum + (b.price * b.quantity), 0);
-
-    // Calculate New Value based on Shock
-    const simulatedPortfolio = portfolio.map(bond => {
+    // Calculate New Value based on Shock for each holding
+    const simulatedPortfolio = holdings.map(bond => {
         // Approx new yield = old yield + shock
-        // Accurately we should use YTM, but for simplicity:
+        // For floating rate bonds this would be different, but assuming fixed for now
         const newYtm = (bond.yield / 100) + (rateShock / 10000);
-        const newPrice = calculateBondPrice(bond.faceValue, bond.coupon / 100, Math.max(0.5, bond.duration), newYtm, 2); // Using duration as proxy for years left
+        // Using duration as proxy for years left if not explicitly tracking residual maturity perfectly
+        // In a real app, calculate days to maturity from bond.maturityDate
+        const yearsRemaining = bond.duration / 0.8; // improving the rough proxy from data.ts
+
+        const newPrice = calculateBondPrice(bond.faceValue, bond.coupon / 100, yearsRemaining, newYtm, 2);
+
         return {
             ...bond,
             newPrice,
-            valueChange: (newPrice - bond.price) * bond.quantity
+            valueChange: (newPrice - bond.price) * bond.quantity,
+            projectedValue: newPrice * bond.quantity
         };
     });
 
-    const newTotalValue = simulatedPortfolio.reduce((sum, b) => sum + (b.newPrice * b.quantity), 0);
+    const newTotalValue = simulatedPortfolio.reduce((sum, b) => sum + b.projectedValue, 0);
     const totalChange = newTotalValue - currentTotalValue;
-    const percentChange = (totalChange / currentTotalValue) * 100;
+    const percentChange = currentTotalValue > 0 ? (totalChange / currentTotalValue) * 100 : 0;
 
-    // Chart Data: Value impact by Bond (Top 5 losers/gainers)
+    // Chart Data: Value impact by Bond
     const impactData = simulatedPortfolio
         .sort((a, b) => Math.abs(b.valueChange) - Math.abs(a.valueChange))
-        .slice(0, 8)
         .map(b => ({
             name: b.issuer + ' ' + b.maturityDate.split('-')[0],
             change: Math.floor(b.valueChange),
             duration: b.duration
         }));
+
+    if (holdings.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                <div className="p-4 bg-slate-900 rounded-full">
+                    <svg className="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-slate-200">No Portfolio Data</h2>
+                <p className="text-slate-400 max-w-sm">
+                    Scenario analysis requires active bond holdings. Visit the market to build your portfolio first.
+                </p>
+                <Link to="/market">
+                    <Button className="bg-blue-600 hover:bg-blue-700">Go to Market</Button>
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
