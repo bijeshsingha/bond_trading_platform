@@ -21,7 +21,7 @@ export const DashboardModule = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Link to="/portfolio" className="block group">
                     <Card className="h-full border-l-4 border-l-emerald-500 hover:bg-slate-900/80 transition-all">
                         <CardHeader className="pb-2">
