@@ -3,17 +3,21 @@ import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '../../c
 import { MOCK_MARKET_DATA, type Bond } from './data';
 import { OrderDialog } from './OrderDialog';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
+import { ExcelUpload } from '../../components/common/ExcelUpload';
+import { Upload } from 'lucide-react';
 
 export const MarketModule = () => {
+    const [bonds, setBonds] = useState<Bond[]>(MOCK_MARKET_DATA);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSector, setSelectedSector] = useState<string>('All');
     const [selectedRating, setSelectedRating] = useState<string>('All');
     const [sortConfig, setSortConfig] = useState<{ key: keyof Bond; direction: 'asc' | 'desc' } | null>(null);
     const [selectedBond, setSelectedBond] = useState<Bond | null>(null);
     const [isOrderOpen, setIsOrderOpen] = useState(false);
+    const [isImportOpen, setIsImportOpen] = useState(false);
 
     // Filtering
-    const filteredData = MOCK_MARKET_DATA.filter(bond => {
+    const filteredData = bonds.filter(bond => {
         const matchesSearch = bond.issuer.toLowerCase().includes(searchTerm.toLowerCase()) || bond.id.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesSector = selectedSector === 'All' || bond.sector === selectedSector;
         const matchesRating = selectedRating === 'All' || bond.rating === selectedRating;
@@ -41,6 +45,10 @@ export const MarketModule = () => {
         setIsOrderOpen(true);
     };
 
+    const handleImport = (newBonds: Bond[]) => {
+        setBonds(prev => [...newBonds, ...prev]);
+    };
+
     // Scatter Data for Chart
     const scatterData = sortedData.map(bond => ({
         x: bond.duration,
@@ -59,7 +67,15 @@ export const MarketModule = () => {
                     <h2 className="text-2xl font-bold text-slate-100">Market Explorer</h2>
                     <p className="text-slate-400 text-sm">Real-time bond market data and execution</p>
                 </div>
-                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                <div className="flex flex-wrap gap-2 w-full md:w-auto items-center">
+                    <Button
+                        onClick={() => setIsImportOpen(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white gap-2 flex items-center px-3"
+                    >
+                        <Upload size={16} />
+                        Import Excel
+                    </Button>
+
                     <Input
                         placeholder="Search Issuer or ID..."
                         value={searchTerm}
@@ -162,7 +178,7 @@ export const MarketModule = () => {
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-0.5 rounded text-xs border ${bond.rating.startsWith('A') ? 'border-green-800 bg-green-900/20 text-green-400' :
-                                                    'border-amber-800 bg-amber-900/20 text-amber-400'
+                                                'border-amber-800 bg-amber-900/20 text-amber-400'
                                                 }`}>
                                                 {bond.rating}
                                             </span>
@@ -192,6 +208,13 @@ export const MarketModule = () => {
                 open={isOrderOpen}
                 onClose={() => setIsOrderOpen(false)}
             />
+
+            {isImportOpen && (
+                <ExcelUpload
+                    onImport={handleImport}
+                    onClose={() => setIsImportOpen(false)}
+                />
+            )}
         </div>
     );
 };
